@@ -38,30 +38,42 @@ function render(){
   let fretNums='<span></span>'+[...Array(12)].map((_,i)=>'<span>'+i+'</span>').join('');
   let consigne=`<div class="gtr-consigne">Trouve la note <span style="color:#b45309">${state.note}</span> sur la corde <span style="color:#15803d">${strNames[state.sIdx]}</span>.</div>`;
   let fboard=notes.slice().reverse().map((row,ri)=>{
-    let sIdx=5-ri,act=sIdx===state.sIdx?' gtr-act':'';
-    let lbl='<span class="gtr-str'+act+'">'+strNames.slice().reverse()[ri]+'</span>';
-    let cases=row.map((n,fIdx)=>{
-      let c="";if(sIdx!==state.sIdx)c="inactive";
-      if(state.lastClk&&state.lastClk.sIdx===sIdx&&state.lastClk.fIdx===fIdx)c=state.lastRes?"green":"red";
-      if(fIdx===0)c+=" dot";
-      return `<button class="${c}" data-s="${sIdx}" data-f="${fIdx}" ${sIdx!==state.sIdx?"disabled":""}>${fIdx===0?"●":""}</button>`;
-    }).join('');
-    return lbl+cases;
+    // ... (pas besoin de changer ici)
   }).join('');
-  let badgeHTML=BADGES.map(b=>`<span>${b.emoji} ${b.label} <span style="color:#15803d">(${b.rule})</span></span>`).join("");
+  let badgeHTML = state.mode === 'validate'
+    ? BADGES.map(b=>`<span>${b.emoji} ${b.label} <span style="color:#15803d">(${b.rule})</span></span>`).join("")
+    : "";
   let scoreHTML=`Score: <b>${state.score}</b> / ${state.tries} &nbsp;|&nbsp; Série: <b>${state.streak}</b>`;
-el("guitar-app").innerHTML=`
-  <div class="gtr-c">
-    <div class="gtr-badges">${badgeHTML}</div>
-    ${consigne}
-    <div class="gtr-fret" id="fret-top">${fretNums}</div>
-    <div class="gtr-fret" id="gtr-fboard">${fboard}</div>
-    <div class="gtr-fret" id="fret-bot">${fretNums}</div>
-    <div class="gtr-score">${scoreHTML}</div>
-    <div class="gtr-score" id="timer">${state.mode==='validate'?`Temps: <b>${state.time}</b>s`:""}</div>
-    <div style="margin-top:14px"><button id="restart" class="gtr-fret-btn" style="background:#6366f1;color:#fff;">Rejouer</button></div>
-  </div>
-`;
+  el("guitar-app").innerHTML=`
+    <div class="gtr-c">
+      <div class="gtr-badges">${badgeHTML}</div>
+      ${consigne}
+      <div class="gtr-fret" id="fret-top">${fretNums}</div>
+      <div class="gtr-fret" id="gtr-fboard">${fboard}</div>
+      <div class="gtr-fret" id="fret-bot">${fretNums}</div>
+      <div class="gtr-score">${scoreHTML}</div>
+      <div class="gtr-score" id="timer">${state.mode==='validate'?`Temps: <b>${state.time}</b>s`:""}</div>
+      <div style="margin-top:14px"><button id="restart" class="gtr-fret-btn" style="background:#6366f1;color:#fff;">Rejouer</button></div>
+    </div>
+  `;
+  // ... le reste ne change pas ...
+}
+
+function badgeCheck(){
+  if(state.mode !== 'validate') return; // <-- Ajoute cette ligne !
+  for(let i=0;i<BADGES.length;i++){
+    let b=BADGES[i];
+    if(state.badges.indexOf(b.label)===-1&&b.check(state)){
+      state.badges.push(b.label);
+      popup(`<div style="font-size:36px">${b.emoji}</div>
+        <div style="font-weight:bold;">Badge "${b.label}" obtenu !</div>
+        <div>${b.rule}</div>
+        <div style="margin-top:12px;font-size:13px;">Prends en photo ce badge et envoie-le par WhatsApp pour valider ton niveau.</div>`);
+      break;
+    }
+  }
+}
+
 
   document.querySelectorAll("#gtr-fboard button").forEach(btn=>{
     btn.onclick=function(){
