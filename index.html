@@ -1,0 +1,137 @@
+<div id="guitar-app"></div>
+<style>
+#guitar-app *{box-sizing:border-box;font-family:sans-serif;}
+.gtr-c{max-width:650px;margin:40px auto 0;background:#fffbe8cc;border-radius:20px;box-shadow:0 6px 32px #0001;padding:24px;}
+.gtr-fret{display:grid;grid-template-columns:60px repeat(12,38px);}
+.gtr-fret span,.gtr-fret button{height:34px;display:flex;align-items:center;justify-content:center;}
+.gtr-str{font-weight:bold;font-size:13px;}
+.gtr-act{background:#bbf7d0;}
+.gtr-fret button{border:1px solid #ddd;background:#f9fafb;border-radius:9px;cursor:pointer;font-weight:bold;margin:1px;}
+.gtr-fret button.inactive{background:#eee;cursor:not-allowed;}
+.gtr-fret button.green{background:#a7f3d0;}
+.gtr-fret button.red{background:#fecaca;}
+.gtr-fret button.dot{background:#e0e7ef;}
+.gtr-score{margin:20px 0 0 0;font-size:1rem;}
+.gtr-badges{margin-bottom:18px;font-size:14px;}
+.gtr-badges span{margin-right:10px;}
+.gtr-consigne{margin:15px 0;padding:8px 12px;background:#fef9c3;border-radius:8px;font-weight:bold;}
+.gtr-popup{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0006;}
+.gtr-popin{background:#fff;padding:25px 25px 18px 25px;border-radius:15px;box-shadow:0 2px 20px #0002;text-align:center;}
+.gtr-popin .btn{margin:16px 0 0 0;padding:6px 26px;border-radius:8px;background:#22c55e;color:#fff;font-weight:bold;border:none;cursor:pointer;}
+.gtr-popin .btn:hover{background:#16a34a;}
+</style>
+<script>
+(function(){
+const notes=[["E","F","F#","G","G#","A","A#","B","C","C#","D","D#"],["A","A#","B","C","C#","D","D#","E","F","F#","G","G#"],["D","D#","E","F","F#","G","G#","A","A#","B","C","C#"],["G","G#","A","A#","B","C","C#","D","D#","E","F","F#"],["B","C","C#","D","D#","E","F","F#","G","G#","A","A#"],["E","F","F#","G","G#","A","A#","B","C","C#","D","D#"]];
+const strNames=["Mi grave","La","Ré","Sol","Si","Mi aiguë"];
+const BADGES=[
+  {emoji:"🥉",label:"Découverte",rule:"10 bonnes réponses.",check:s=>s.score>=10},
+  {emoji:"🥈",label:"Progression",rule:"20 bonnes réponses, 75% de réussite.",check:s=>s.score>=20&&s.score/s.tries>=0.75},
+  {emoji:"🏅",label:"Maîtrise",rule:"50 bonnes réponses, moins de 10 fautes.",check:s=>s.score>=50&&(s.tries-s.score)<=10}
+];
+function randQ(){let s=Math.floor(Math.random()*6),f=Math.floor(Math.random()*12);return{note:notes[s][f],sIdx:s,fIdx:f};}
+function bonus(score){if(score<10)return 5;if(score<20)return 4;return 2;}
+let state={...randQ(),score:0,tries:0,streak:0,lastClk:null,lastRes:null,badges:[],time:20,timer:null,mode:null};
+const el=id=>document.getElementById(id);
+
+function render(){
+  let fretNums='<span></span>'+[...Array(12)].map((_,i)=>'<span>'+i+'</span>').join('');
+  let consigne=`<div class="gtr-consigne">Trouve la note <span style="color:#b45309">${state.note}</span> sur la corde <span style="color:#15803d">${strNames[state.sIdx]}</span>.</div>`;
+  let fboard=notes.slice().reverse().map((row,ri)=>{
+    let sIdx=5-ri,act=sIdx===state.sIdx?' gtr-act':'';
+    let lbl='<span class="gtr-str'+act+'">'+strNames.slice().reverse()[ri]+'</span>';
+    let cases=row.map((n,fIdx)=>{
+      let c="";if(sIdx!==state.sIdx)c="inactive";
+      if(state.lastClk&&state.lastClk.sIdx===sIdx&&state.lastClk.fIdx===fIdx)c=state.lastRes?"green":"red";
+      if(fIdx===0)c+=" dot";
+      return `<button class="${c}" data-s="${sIdx}" data-f="${fIdx}" ${sIdx!==state.sIdx?"disabled":""}>${fIdx===0?"●":""}</button>`;
+    }).join('');
+    return lbl+cases;
+  }).join('');
+  let badgeHTML=BADGES.map(b=>`<span>${b.emoji} ${b.label} <span style="color:#15803d">(${b.rule})</span></span>`).join("");
+  let scoreHTML=`Score: <b>${state.score}</b> / ${state.tries} &nbsp;|&nbsp; Série: <b>${state.streak}</b>`;
+el("guitar-app").innerHTML=`
+  <div class="gtr-c">
+    <div class="gtr-badges">${badgeHTML}</div>
+    ${consigne}
+    <div class="gtr-fret" id="fret-top">${fretNums}</div>
+    <div class="gtr-fret" id="gtr-fboard">${fboard}</div>
+    <div class="gtr-fret" id="fret-bot">${fretNums}</div>
+    <div class="gtr-score">${scoreHTML}</div>
+    <div class="gtr-score" id="timer">${state.mode==='validate'?`Temps: <b>${state.time}</b>s`:""}</div>
+    <div style="margin-top:14px"><button id="restart" class="gtr-fret-btn" style="background:#6366f1;color:#fff;">Rejouer</button></div>
+  </div>
+`;
+
+  document.querySelectorAll("#gtr-fboard button").forEach(btn=>{
+    btn.onclick=function(){
+      let s=+btn.getAttribute("data-s"),f=+btn.getAttribute("data-f");
+      if(state.mode==='validate'&&!state.timer)return;
+      let correct=(s===state.sIdx&&notes[s][f]===state.note);
+      state.lastClk={sIdx:s,fIdx:f};state.lastRes=correct;
+      if(correct){state.score++;state.streak++;if(state.mode==='validate'){state.time+=bonus(state.score-1);}}
+      else{state.streak=0;}
+      state.tries++;
+      render();
+      setTimeout(()=>{
+        if(correct){Object.assign(state,randQ(),{lastClk:null,lastRes:null});}
+        else{state.lastClk=null;state.lastRes=null;}
+        render();
+        badgeCheck();
+      },550);
+    }
+  });
+  el("restart").onclick=function(){reset();}
+}
+function badgeCheck(){
+  for(let i=0;i<BADGES.length;i++){
+    let b=BADGES[i];
+    if(state.badges.indexOf(b.label)===-1&&b.check(state)){
+      state.badges.push(b.label);
+      popup(`<div style="font-size:36px">${b.emoji}</div>
+        <div style="font-weight:bold;">Badge "${b.label}" obtenu !</div>
+        <div>${b.rule}</div>
+        <div style="margin-top:12px;font-size:13px;">Prends en photo ce badge et envoie-le par WhatsApp pour valider ton niveau.</div>`);
+      break;
+    }
+  }
+}
+function popup(htmlMsg){
+  let p=document.createElement("div");
+  p.className="gtr-popup";p.innerHTML=`<div class="gtr-popin">${htmlMsg}<br><button class="btn">OK</button></div>`;
+  document.body.appendChild(p);
+  p.querySelector(".btn").onclick=()=>{p.remove()};
+}
+function reset(){
+  clearInterval(state.timer);
+  Object.assign(state,randQ(),{score:0,tries:0,streak:0,lastClk:null,lastRes:null,badges:[],time:20,timer:null,mode:null});
+  modeSel();
+}
+function timerStart(){
+  state.timer=setInterval(()=>{
+    state.time--;render();
+    if(state.time<=0){clearInterval(state.timer);popup(`<div style="font-size:1.5rem">⏰ Temps écoulé !</div><div>Score final : <b>${state.score}</b></div><button class="btn" onclick="location.reload()">Rejouer</button>`);}
+  },1000);
+}
+function modeSel(){
+  el("guitar-app").innerHTML=`
+    <div class="gtr-popup"><div class="gtr-popin">
+      <div style="font-size:1.5rem;font-weight:bold;">Choisis ton mode</div>
+      <div style="margin:15px 0 9px 0"><button class="btn" id="btrain">Entraînement</button></div>
+      <div style="margin-bottom:6px;">Mode libre, sans chrono.</div>
+      <div style="margin:16px 0 9px 0"><button class="btn" id="bval">Validation</button></div>
+      <div>Chrono, bonus de temps, badges validables.</div>
+    </div></div>
+  `;
+  el("btrain").onclick=function(){state.mode="train";render();}
+  el("bval").onclick=function(){
+    el("guitar-app").innerHTML=`<div class="gtr-popup"><div class="gtr-popin">
+      <div style="font-size:1.1rem;font-weight:bold;margin-bottom:12px">Quel badge veux-tu valider ?</div>
+      ${BADGES.map((b,i)=>`<div style="margin-bottom:7px"><button class="btn" id="badge${i}">${b.emoji} ${b.label}</button> <span style="font-size:13px;color:#15803d">${b.rule}</span></div>`).join("")}
+    </div></div>`;
+    BADGES.forEach((b,i)=>el("badge"+i).onclick=function(){state.mode="validate";state.badges=[];render();timerStart();});
+  }
+}
+modeSel();
+})();
+</script>
